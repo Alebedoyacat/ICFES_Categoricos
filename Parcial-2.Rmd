@@ -764,6 +764,10 @@ Tras realizar el ajuste mediante los tres tipos de modelos logísticos que se ex
 Con lo anterior queda en evidencia que el resultado puede ser explicado por distintas variables de tipo categórico al emplear la regresión logística, para el caso particular, la naturaleza del colegio, la clasificación socioeconómica, el género y la conexión a internet en el hogar. 
 
 
+# Código empleado
+
+El codigo y todo el desarrollo del presente documento se encuentran presentes en conjunto con la base de datos en el siguiente [Repositorio virtual](https://github.com/Alebedoyacat/ICFES_Categoricos). El acceso es libre y continuo.
+
 
 
  

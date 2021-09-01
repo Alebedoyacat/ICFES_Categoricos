@@ -755,13 +755,40 @@ colnames(tabla4) <- c("Beta","Error","Z-value","p-value")
 kable(tabla4, caption = "Estimaciones para el modelo")
 ```
 
-Los resultados para las pruebas de significancia indivivuales arrojanron entonces que cada una de las estimaciones realizadas para los coeficientes del modelo son significativas en la explicación conjunta del resultado, es decir,  
+Los resultados para las pruebas de significancia indivivuales arrojanron entonces que cada una de las estimaciones realizadas para los coeficientes del modelo son significativas en la explicación conjunta del resultado. 
+
+Como conclusiones observando los betas estimados se puede decir que, denotando el vector con los logits (la respuesta de interés) como f, los modelos estimados con sus respectivas conclusiones son los siguientes:
+
+* Para el caso de la comparación entre los resultados de 0 a 300 y de 300 a 600:
+
+$$  \hat{f}=-1.1592 - 0.1105x$$
+Con x tomando el valor 0 si se es de un colegio privado y 1 si se es de un colegio oficial. La conclusión entonces es que el pertenecer a un colegio oficial disminuye el logit de quedar entre los primeros 300 resultados en 0.11 unidades, es decir, la probabilidadde quedar entre los 300 primeros resultados es menor para colegios oficiales que para colegios privados, o lo que es lo mismo para el caso, es más probable para alguien de un colegio oficial quedar en el rango de resultados de 300 a 600 que de quedar en el rango de 0 a 300. 
+
+$$ \hat{f}=-1.1592 + 0.1466x $$
+
+Con x tomando el valor 0 si se es de género femenino y 1 si se es de género masculino. La conclusión entonces es que el ser hombre aumenta el logit de quedar entre los primeros 300 resultados en 0.14 unidades, es decir, la probabilidad de quedar entre los 300 primeros resultados es mayor para el género masculino que para el género femenino, o lo que es lo mismo para el caso, es más probable para alguien de género femenino quedar en el rango de resultados de 300 a 600 que de quedar en el rango de 0 a 300. 
+
+$$ \hat{f}=-1.1592 + 0.5023x $$
+Con x tomando el valor 0 si no se posee internet en casa y 1 si se posee internet en casa, manteniendo las demás variables constantes. La conclusión entonces es que el tener conexión a internet en el hogar aumenta el logit de quedar entre los primeros 300 resultados en aproximadamente 0.5 unidades, es decir, la probabilidad de quedar entre los 300 primeros resultados es mayor para personas con internet en sus hogares que para quienes no, o lo que es lo mismo para el caso, es más probable para alguien sin internet el quedar en el rango de resultados de 300 a 600 que de quedar en el rango de 0 a 300.
+
+
+* Para el caso de la comparación entre los resultados de 0 a 300 y de 600 a 1000:
+
+En este caso las conclusiones serán las mismas que las anteriores en cuanto al aumento/reducción del logit dependiendo del nivel de la variable explicativa, esto en tanto los betas siguen siendo los mismos, la variación entonces será el $\beta_{0}$ puesto que para la comparación entre los niveles de respuesta (0,300] y (300,600] era **-1.1592**, y para la comparación entre los niveles de respuesta (0,300] y (600,1000] es **-1.1066**.
+
+Así las cosas, por ejemplo  es más probable que alguien de un colegio oficial, de género femenino o sin internet en su casa, obtenga un resultado entre 600 y 1000 que entre 0 y 300 respecto a aquellos que son de colegio privado, género masculino, o que tienen internet en casa. 
+
 
 # Conclusión
 
-Tras realizar el ajuste mediante los tres tipos de modelos logísticos que se exploraron durante el curso, se obtienen resultados similares en la medida en que las variables explicativas elegidas han sido significativas en la explicación del resultado en las pruebas ICFES aún haciendo los agrupamientos que se hicieron dentro de esta. 
+Tras realizar el ajuste mediante los tres tipos de modelos logísticos que se exploraron durante el curso, se obtienen resultados similares en la medida en que las variables explicativas elegidas han sido significativas en la explicación del resultado en las pruebas ICFES aún haciendo los agrupamientos que se hicieron dentro de esta. Las respuestas arrojadas por los resultados son congruentes con lo que el conocimiento a priori había podido indicar en cada caso de estudio. 
 
-Con lo anterior queda en evidencia que el resultado puede ser explicado por distintas variables de tipo categórico al emplear la regresión logística, para el caso particular, la naturaleza del colegio, la clasificación socioeconómica, el género y la conexión a internet en el hogar. 
+Con lo anterior queda en evidencia que el resultado puede ser explicado por distintas variables de tipo categórico al emplear la regresión logística, para el caso particular, la naturaleza del colegio, la clasificación socioeconómica, el género y la conexión a internet en el hogar, mostrándose a groso modo que:
+
+* El ser de un colegio privado aumenta las probabilidades de obtener un mejor resultado en el examen.
+* El género masculino tiene mayores probabilidades de obtener un mejor resultado en el examen.
+* El poseer un mejor nivel socioeconómico es un factor que aumenta la probabilidad de obtener un mejor resultado en el examen.
+* El poseer internet en casa es un factor que aumenta la probabilidad de obtener un mejor resultado en el examen. 
 
 
 # Código empleado

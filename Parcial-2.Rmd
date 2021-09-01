@@ -1,0 +1,778 @@
+---
+title: | 
+  <center> Entrega final (Parcial #2) </center>
+  <center> Introducción al Análisis de Datos Categóricos </center>
+author: |
+  <center> Alejandro Bedoya Cataño </center>
+  <center> c.c 1035879811 </center>
+date: "Agosto, 2021"
+output: 
+  prettydoc::html_pretty:
+    theme: tactile
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+LogisticaGSK<-function(N,Nro.Estratos,X=X){
+# Funciones auxiliares###########################
+# Funcion que crea una matriz en bloque a partir de dos matrices
+crea.bloque<-function(mat1,mat2){
+nf1<-nrow(mat1);nc1<-ncol(mat1)
+nf2<-nrow(mat2);nc2<-ncol(mat2)
+mat1<-cbind(mat1,matrix(0,nrow=nf1,ncol=nc2))
+mat2<-cbind(matrix(0,nrow=nf2,ncol=nc1),mat2)
+matdef<-rbind(mat1,mat2)
+return(matdef)
+}
+# Genera la A apropiada
+A<-kronecker(diag(rep(1,Nro.Estratos)),matrix(c(1,-1),nrow=1))
+# Funcion que corrige los ceros convirtiendolos en 0.5
+ceros.a.5<-function(Tabla){
+Nro.col<-ncol(Tabla)
+if(any(Tabla==0))Tabla<-matrix(ifelse(as.vector(Tabla)==0,
+0.5,Tabla),ncol=Nro.col)
+return(Tabla)
+}
+#################################################
+N<-matrix(t(N),ncol=1,byrow=F)
+N<-ceros.a.5(N)
+Nro.respuestas<-length(N)/Nro.Estratos
+donde.voy<-0
+for(i in 1:Nro.Estratos){
+identifica<-c('Estrato ',i)
+temp<-N[(donde.voy+1):(donde.voy+Nro.respuestas)]
+donde.voy<-donde.voy+Nro.respuestas
+n.temp<-sum(temp)
+probab<-matrix(temp/n.temp,ncol=1)
+temp<- probab%*%t(probab)
+temp2<-diag(as.vector(probab))
+varcov.p<-(temp2-temp)/n.temp
+if(i==1){
+varcov.grande<-varcov.p
+prob.grande<-probab
+}
+else{
+varcov.grande<-crea.bloque(varcov.grande,varcov.p)
+prob.grande<-rbind(prob.grande,probab)
+}
+}
+prob.estimada<-matrix(prob.grande,ncol=Nro.Estratos,byrow=T)
+VCov.prob.estimada<-varcov.grande
+D<-diag(as.vector(1/prob.grande))
+varcov.grande<-D%*%varcov.grande%*%D
+prob.grande<-log(prob.grande)
+varcov.grande.log<-varcov.grande
+prob.grande.log<-prob.grande
+f=A%*%matrix(prob.grande,ncol=1)
+varcov.f<-A%*%varcov.grande%*%t(A)
+print('********** Estimacion del modelo *****************')
+temp<-t(X)%*%solve(varcov.f)
+varcov.b<-solve(temp%*%X)
+beta<-varcov.b%*%temp%*%f
+valores.z<-beta/sqrt(diag(varcov.b))
+estadisticos<-cbind(beta,sqrt(diag(varcov.b)),
+valores.z,2*pnorm(abs(valores.z),lower.tail=F))
+colnames(estadisticos)<-c('beta','error','z-value','p-value')
+print(estadisticos)
+print('*********************************************')
+print('Prueba Ho:b1=b2=...=bk=0') # Se asume intercepto
+print('*********************************************')
+valor.chi<-t(beta[-1])%*%solve(varcov.b[-1,-1])%*%beta[-1]
+print(c('Chicuadrardo calculado: ',valor.chi))
+gl=nrow(varcov.b)-1
+valor.p=pchisq(valor.chi,gl,lower.tail=F)
+print(c('Valor-p: ',valor.p))
+print('*********************************************')
+f.gorro<-X%*%beta
+varcov.fg<-X%*%varcov.b%*%t(X)
+error.fg<-sqrt(diag(varcov.fg))
+residuales<-f-f.gorro
+Btemp<-diag(1,length(f))-X%*%varcov.b%*%temp
+Sigma.e<-Btemp%*%varcov.f%*%t(Btemp)
+error.res<-sqrt(1/diag(Sigma.e))
+res.est<-residuales*error.res
+list(prob.estimada=prob.estimada,
+VCov.prob.estimada=VCov.prob.estimada,
+prob.grande.log=prob.grande.log,
+varcov.grande.log=varcov.grande.log,
+logits<-f,
+VCov.logits<-varcov.f,
+beta=beta,
+VCov.beta=varcov.b,
+logits.estimados=f.gorro,
+VCov.logits.est=varcov.fg,
+residuales.logits=residuales,
+residuales.logits.stand=res.est
+)
+list(prob.estimada=prob.estimada,beta=beta,logits.estimados=f.gorro)
+} # FIN Funcion LogisticaGSK **************
+```
+
+```{r include=FALSE}
+ceros.a.5<-function(Tabla){
+Nro.col<-ncol(Tabla)
+if(any(Tabla==0))Tabla<-matrix(ifelse(as.vector(Tabla)==0,
+0.5,Tabla),ncol=Nro.col)
+Tabla
+}
+```
+
+```{r include=FALSE}
+multinomial.GSK<-function(N,Nro.Estratos,X,ordenada=TRUE){
+# Funcion que crea una matriz en bloque a partir de dos matrices
+crea.bloque<-function(mat1,mat2){
+nf1<-nrow(mat1);nc1<-ncol(mat1)
+nf2<-nrow(mat2);nc2<-ncol(mat2)
+mat1<-cbind(mat1,matrix(0,nrow=nf1,ncol=nc2))
+mat2<-cbind(matrix(0,nrow=nf2,ncol=nc1),mat2)
+matdef<-rbind(mat1,mat2)
+return(matdef)
+}
+require(MASS)
+N<-matrix(t(N),ncol=1,byrow=F)
+N<-ceros.a.5(N)
+Nro.respuestas<-length(N)/Nro.Estratos
+donde.voy<-0
+for(i in 1:Nro.Estratos){
+temp<-N[(donde.voy+1):(donde.voy+Nro.respuestas)]
+print('Frecuencias de la subpoblacion')
+print(temp)
+donde.voy<-donde.voy+Nro.respuestas
+n.temp<-sum(temp)
+probab<-matrix(temp/n.temp,ncol=1)
+temp<- probab%*%t(probab)
+temp2<-diag(as.vector(probab))
+varcov.p<-(temp2-temp)/n.temp
+print('p estimado y matriz de varianzas y covarianzas')
+print('Estrato ')
+print(i)
+print(probab)
+print(varcov.p)
+if(i==1){
+varcov.grande<-varcov.p
+prob.grande<-probab
+}
+else{
+varcov.grande<-crea.bloque(varcov.grande,varcov.p)
+prob.grande<-rbind(prob.grande,probab)
+}
+}
+cat('****************** \n')
+# Regresion logistica multinomial ordenada: logits acumulados
+if(ordenada==TRUE){
+A<-NULL
+for(i in 1:(Nro.respuestas-1)){
+A<-rbind(A,
+c(rep(1,i),rep(0,Nro.respuestas-i)),
+c(rep(0,i),rep(1,Nro.respuestas-i))
+)
+}
+}
+if(ordenada==FALSE){
+A<-NULL
+for(i in 1:(Nro.respuestas-1)){
+tempA<-matrix(rep(0,Nro.respuestas),nrow=1)
+tempA[i]<-1
+tempB<-matrix(rep(1,Nro.respuestas),nrow=1)
+tempB[i]<-0
+A<-rbind(A,tempA,tempB)
+}
+}
+print('Matriz A')
+print(A)
+dim(A)
+A<-kronecker(diag(rep(1,Nro.Estratos)),A)
+f.temp=A%*%matrix(prob.grande,ncol=1)
+varcov.f.temp<-A%*%varcov.grande%*%t(A)
+log.f.temp<-log(f.temp)
+Dtemp<-diag(1/as.vector(f.temp))
+varcov.log.f.temp<-Dtemp%*%varcov.f.temp%*%t(Dtemp)
+B<-kronecker(diag(rep(1,(Nro.respuestas-
+1)*Nro.Estratos)),matrix(c(1,-1),nrow=1))
+f<-B%*%log.f.temp
+varcov.f<-B%*%varcov.log.f.temp%*%t(B)
+print('f observado')
+print(f)
+print('Matriz de Varianzas y Covarianzas de f observado')
+print(varcov.f)
+interceptos<-function(Nro.respuestas,Nro.pob){
+N<-Nro.respuestas-1
+A<-diag(rep(1,N))
+Inter<-kronecker(matrix(rep(1,Nro.pob),ncol=1),A)
+Inter
+}
+IA<-interceptos(Nro.respuestas,Nro.Estratos)
+print('Parte de la matriz de dise~no asociada con los Interceptos')
+print(IA)
+print('Parte de la matriz de dise~no asociada con las covariables')
+print(X)
+if(nrow(X)==Nro.Estratos){
+X.def<-NULL
+for(i in 1:nrow(X)){
+for(j in 1:(Nro.respuestas-1)) X.def<-rbind(X.def,X[i,])
+}
+X<-X.def
+}
+print(X)
+X<-cbind(IA,X)
+print('Matriz de dise~no completa')
+print(X)
+temp<-t(X)%*%ginv(varcov.f)
+print(temp)
+varcov.b<-ginv(temp%*%X)
+beta<-varcov.b%*%temp%*%f
+valores.z<-beta/sqrt(diag(varcov.b))
+valores.p<-2*pnorm(abs(valores.z),lower.tail=F)
+res.temp<-cbind(beta,sqrt(diag(varcov.b)),valores.z,valores.p)
+print('Betas......Error Est......Valor Z......Valor-p')
+print(res.temp)
+print('Matriz de varianzas y covarianzas de beta')
+print(varcov.b)
+print(dim(varcov.b))
+temp<-Nro.respuestas-1
+print(temp)
+temp.2<-varcov.b[-c(1:temp),-c(1:temp)]
+print('Submatriz')
+print(temp.2)
+print(dim(temp.2))
+inv.temp<-ginv(temp.2)
+print(dim(inv.temp))
+valor.chi<-t(beta[-c(1:temp)])%*%inv.temp %*%beta[-c(1:temp)]
+print('Prueba Asociada con las Covariables')
+print('Prueba Chi-cuadrado para Ho:b1=b2=...=bk=0')
+print(valor.chi)
+grados.lib<-nrow(inv.temp)
+valorp<-pchisq(valor.chi,grados.lib,lower.tail=F)
+print(c('Valor-p=',valorp))
+f.gorro<-X%*%beta
+varcov.fg<-X%*%varcov.b%*%t(X)
+error.fg<-sqrt(diag(varcov.fg))
+print('f estimada')
+print(f.gorro)
+print('Error de f')
+print(error.fg)
+print('Matriz de varianzas y covarianzas de la f estimada')
+print(varcov.fg)
+# Calculando la tabla de probabilidades estimadas por el modelo
+f.matriz<-matrix(f.gorro,nrow=Nro.Estratos,byrow=T)
+print('Funciones Respuesta')
+print(f.matriz)
+# Funcion que reconvierte un vector de respuestas f a
+# un vector de probabilidades
+if(ordenada==T){
+f.a.pi<-function(f){
+f.s.1.f<-exp(f)/(1+exp(f))
+pi.pred<-f.s.1.f-c(0,f.s.1.f[-length(f)])
+pi.pred<-c(pi.pred,1-sum(pi.pred))
+pi.pred
+} # Fin funcion f.a.pi() cuando reg. log. ordenada
+}
+if(ordenada==F){
+f.a.pi<-function(f){
+pi.pred<-exp(f)/(1+exp(f))
+pi.pred<-c(pi.pred,1-sum(pi.pred))
+pi.pred
+} # Fin funcion f.a.pi() cuando reg. log. es NO ordenada
+}
+prob.res<-matrix(apply(f.matriz,1,f.a.pi),nrow=Nro.Estratos, byrow=T)
+print('Probabilidades Predichas')
+print(prob.res)
+#print(apply(res,1,sum))
+N<-matrix(N,nrow=Nro.Estratos,byrow=T)
+prob.obs<-N/apply(N,1,sum)
+print('Probabilidades Observadas con la correccion de ceros')
+print(prob.obs)
+# bajo el supuesto de que el modelo es correcto cada estrato
+# tiene una matriz de var-cov. Tomamos los elementos de
+# la diagonal principal que son las varianzas.
+sd.modelo<-sqrt(prob.res*(1-prob.res)/apply(N,1,sum))
+errores<-prob.obs-prob.res
+print('Residuales Crudos')
+print(errores)
+errores.estandarizados<-errores/sd.modelo
+print('Residuales Estandarizados')
+print(errores.estandarizados)
+par(xaxt='n')
+matplot(t(errores.estandarizados),type='b',ylab='',xlab='')
+title(main='Residuales Estandarizados por Estratos')
+title(ylab='Residuales Estandarizados')
+title(xlab='Categorias de la Respuesta')
+# Calculo de valores criticos para los residuales
+max.res<-function(x,p0){
+n<-sum(x)
+p.e<-x/n
+res<-abs(p.e-p0)/sqrt(p0*(1-p0)/n)
+res<-max(res)
+return(res)
+}
+valor.critico<-function(p0,n){
+muestra.b<-rmultinom(2000,n,p0)
+res<-apply(muestra.b,2,max.res,p0)
+res<-quantile(res,probs=0.95)
+return(res)
+}
+n<-apply(N,1,sum)
+val.crit<-rep(NA,nrow(prob.res))
+for(i in 1:nrow(prob.res)){
+val.crit[i]<-valor.critico(prob.res[i,],n[i])
+}
+print('Valores Criticos')
+print(t(val.crit))
+dev.new()
+# Nro. de celdas graficas para residuales
+par(mfrow=c(3,ceiling(nrow(prob.res)/3))) #<----- ESPECIFICADO
+for(i in 1:nrow(N)){
+plot(errores.estandarizados[i,],type='b',ylab='Residuales',
+xlab='',ylim=c(-3,3))
+abline(h=c(-val.crit[i],val.crit[i]),col='red',lty=2)
+}
+}
+ # Fin de la funcion
+```
+
+```{r include=FALSE}
+pruebasXvariables<-function(betas,V.betas,nro.var,
+nro.nivelsXvariable){
+#library(MASS)
+betas<-as.vector(betas)
+beta.temp<-betas[-1] # Eliminamos el intercepto
+V.beta.temp<-V.betas[-1,-1]
+resu<-NULL
+resu2<-NULL
+donde.voy<-1
+for(iii in 1:nro.var){
+hasta.donde<-donde.voy+(nro.nivelsXvariable-1)-1
+beta.i<-matrix(beta.temp[donde.voy:hasta.donde],ncol=1)
+V.beta.i<-V.beta.temp[donde.voy:hasta.donde,donde.voy:hasta.donde]
+#Prueba Global de la variable i
+chi.temp<-t(beta.i)%*%solve(V.beta.i)%*%beta.i
+gl.temp<-qr(V.beta.i)$rank
+cat(gl.temp)
+valor.p.i<-pchisq(chi.temp,gl.temp,lower.tail=F)
+resu<-rbind(resu,c(iii,chi.temp,gl.temp,valor.p.i))
+donde.voy<-donde.voy+1
+}
+colnames(resu)<-c('Variable','Chi Cuadrado','G.L.','Valor-p')
+print(resu)
+chi0<-beta.i^2/diag(V.beta.i)
+p.valor0<-pchisq(chi0,1,lower.tail=F)
+temp0<-cbind(iii,0,1:length(beta.i),chi0,1,p.valor0)
+if(length(beta.i)>1){
+A<-matrix(c(1,-1),ncol=2)
+for(jj in 1:(length(beta.i)-1)){
+for(kk in (jj+1):length(beta.i)){
+beta.jk<-beta.i[c(jj,kk)]
+V.beta.jk<-V.beta.i[c(jj,kk),c(jj,kk)]
+chi.temp.jk<-t(A%*%beta.jk)%*%ginv(A%*%V.beta.jk%*%t(A))%*%A%*%
+beta.jk
+gl.temp.jk<-qr(A%*%V.beta.jk%*%t(A))$rank # Este es 1
+valor.p.jk<-pchisq(chi.temp.jk,gl.temp.jk,lower.tail=F)
+resu2<-rbind(resu2,c(iii,jj,kk,chi.temp.jk,gl.temp.jk,valor.p.jk))
+}}}
+resu2<-rbind(temp0,resu2)
+tempo<-resu2[,6]
+tempo2<-p.adjust(tempo, method = 'fdr', n = length(tempo))
+resu2<-cbind(resu2,tempo2)
+if(any(as.vector(nro.nivelsXvariable))>2){
+colnames(resu2)<-c('Var.','Nivel... ','contra...',
+'Chi Cuad.','G.L.','Valor-p','FDR')
+print(resu2)
+}
+}
+```
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+library(dplyr)
+library(kableExtra)
+library(ggplot2)
+setwd("C:/Users/123/Desktop/Datos categóricos/Actividades/Parcial 2")
+datos <- readRDS("BASEICFES.rds")
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+municipios <- c("MEDELLIN","BELLO","SABANETA","GIRARDOTA","BARBOSA",
+                "COPACABANA","ENVIGADO","ITAGUI","LA ESTRELLA",
+                "CALDAS")
+datos %>% 
+  select(resultado, ESTU_RESIDE_MCPIO, economia_colegios,
+         clasificacion_economica, COLE_NATURALEZA,
+         COLE_INST_JORNADA,CODIGO_DANE,
+         ESTU_RESIDE_DEPT, ESTU_GENERO, ECON_SN_INTERNET, ESTU_PUESTO) %>% 
+  filter(ESTU_RESIDE_DEPT =="ANTIOQUIA") -> datos_antioquia
+datos_antioquia <- datos_antioquia[-c(11632,11747,12403,12694,15525,15591,16000),]
+datos_antioquia$ECON_SN_INTERNET <- as.factor(datos_antioquia$ECON_SN_INTERNET)
+datos_antioquia$COLE_NATURALEZA <- as.factor(datos_antioquia$COLE_NATURALEZA)
+datos_antioquia$ESTU_GENERO <- as.factor(datos_antioquia$ESTU_GENERO)
+datos_antioquia$ESTU_GENERO <- droplevels(datos_antioquia$ESTU_GENERO)
+```
+
+
+
+```{r include=FALSE}
+resultado<-cut(datos_antioquia$ESTU_PUESTO,breaks=(0:4)*300)
+summary(resultado)
+table(datos_antioquia$ESTU_GENERO,resultado, datos_antioquia$COLE_NATURALEZA, datos_antioquia$ECON_SN_INTERNET)
+```
+
+# Introducción
+Como continuación del desarrollo empleado en las entregas que hasta este punto se han presentado explorando los conceptos estudiados en el curso, en esta oportunidad el turno es para la modelación logística y logística multinomial. 
+
+En el presente documento se expondrán los resultados obtenidos tras la construcción de tres modelos logísticos, uno clásico de 2x2, uno de respuesta binomial pero de variable explicactiva con multiples niveles, y finalmente un modelo de respuesta multinomial
+
+# Objetivo y metodología
+
+El objetivo en este caso será intentar explicar el resultado obtenido en las pruebas ICFES en el departamento de Antioquia haciendo uso de algunas de las variables categóricas presentes en la base de datos con que se ha desarrollado el curso. La elección de las mismas ha sido a criterio y curiosidad de quien investiga.
+
+Respecto a la metodología, la variable de respuesta ha sido adaptada para explorar el objeto de estudio en diversos niveles de especificidad a la vez que confirmando la parsimonia. Para los dos modelos que precisan de respuesta binomial se ha decidido agrupar la variable resultado en dos únicos niveles:
+
+* **(0,500]** para los resultados que se encuetran en dicho intervalo, es decir, los estudiantes ubicados en los primeros 5 deciles, correspondientes a los "500 mejores" en cada grupo de 1000 analizado.
+
+* **(500,1000]** para los resultados que se encuentran en dicho intervalo, es decir, los estudiantes ubicados en los últimos 5 deciles, correspondientes a los "500 peores" en cada grupo de 1000 analizado en la prueba. 
+
+Por otro lado, para el caso del modelo logístico multinomial se han decidido usar 3 categorías en aras de mantener la sencillez del estudio, la agrupación se ha hecho en tres grupos principales:
+
+* **(0,300]** para denotar los estudiantes con resultados "altos"
+* **(300,600]** para denotar los estudiantes con resultados "medios"
+* **(600,1000]** para denotar los estudiantes con resultados "bajos"
+
+Para los tres modelos ajustados se emplea la metodología GSK mediante las funciones compartidas en clase por el director del curso. 
+
+**Nota:** Los códigos del presente documento se encuentran anexados al final del documento. 
+
+# Modelos logísticos clásicos
+
+El primer objeto de interés para estudiar será la probabilidad de quedar clasificado en los primeros 500 puestos dada la naturaleza del colegio: ¿Es más probable quedar entre los 500 primeros estudiantes si se es de un colegio privado? El conocimiento previo sin mayor información que el contexto económico podría indicarnos que sí, pero corroboremos dicha aseveración. 
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+datos_antioquia %>% 
+  dplyr::filter(COLE_NATURALEZA == "O") %>% 
+  dplyr::select(resultado) %>% 
+  dplyr::group_by(resultado) %>% 
+  dplyr::count(resultado, name = "estudiantes") -> est_oficiales
+datos_antioquia %>% 
+  dplyr::filter(COLE_NATURALEZA == "N") %>% 
+  dplyr::select(resultado) %>% 
+  dplyr::group_by(resultado) %>% 
+  dplyr::count(resultado, name = "estudiantes") -> est_privados
+```
+
+
+```{r include=FALSE}
+menos500_oficiales <- sum(est_oficiales$estudiantes[1:5])
+mas500_oficiales <- sum(est_oficiales$estudiantes[6:10])
+menos500_privados <- sum(est_privados$estudiantes[1:5])
+mas500_privados <- sum(est_privados$estudiantes[6:10])
+```
+
+Primero obsérvense las cantidades de estudiantes para los dos niveles de resultados considerados al segregar por el tipo de colegio en el que estudiaban.
+
+```{r echo=FALSE}
+tabla <- array(c(menos500_oficiales,
+                 mas500_oficiales,menos500_privados,
+                 mas500_privados), c(2,2))
+rownames(tabla) <- c("Oficial","Privado")
+colnames(tabla) <- c("Menos de 500","Más de 500")
+kable(tabla, caption = "Naturaleza del colegio vs resultado")
+```
+
+
+
+```{r include=FALSE}
+N<-matrix(c(25454,10630,28866,8640),nrow=1)
+X<-matrix(c(1,1,0,1),ncol=2,byrow=T)
+LogisticaGSK(N,2,X=X)
+```
+
+Con esa información, obsérvense los resultados obtenidos para la prueba de significancia global del modelo. La prueba tiene asociada la siguiente hipótesis nula
+
+$$  H_{0} : \beta=0 $$
+
+```{r echo=FALSE}
+prueba1 <- array(c(390.97, "5.0912e-87"), c(2,1))
+rownames(prueba1) <- c("Chi-cuadrado calculado", "Valor-p")
+colnames(prueba1) <- c(" ")
+kable(prueba1, caption = "Resultados asociados a la prueba de hipótesis")
+```
+
+Con un valor-p tan cercano a cero, del orden de $10^{-87}$, es posible rechazar con seguridad la hipótesis nula y concluir que el pertenecer a un colegio oficial sí ejerce una diferencia significativa en el logit de obtener un resultado entre 0 y 500. Lo anterior derivará eventualmente, tras las correctas transformaciones, en que el tipo de colegio **sí** afecta la probabilidad de obtener un mejor resultado (inferior a 500 en este caso). La pregunta natural es entonces, ¿en qué medida afecta dicha probabilidad?
+
+El modelo asociado a la tabla estará dado por la siguiente expresión:
+
+$$  \pi_{i} =  \frac{1}{1+exp\{-(\alpha+\beta_{x})\}} $$ 
+
+Para la respectiva estimación de los parámetros se procedió entonces a aplicar la metdología GSK, de la cual se tienen como resultado los siguientes coeficientes.
+
+```{r,echo=FALSE}
+est1 <- array(c(-0.3331,1.2063,0.0168,0.0122,-19.7730,98.3651,"5.0912e-87","0.00"), c(2,4))
+colnames(est1) <- c("Beta","Error","Valor Z","P-valor")
+kable(est1, caption = "Modelo logístico estimado")
+```
+
+Con un valor-p lo suficientemente pequeño como para ser considerado "prácticamente cero" asociado al estadístico de prueba $\chi^{2} $, se concluye que en tanto la estimación para $\beta$ es 1.2063, el pertenecer a un colegio privado aumenta el logit de obtener un resultado entre 0 y 500 en 1.2063 unidades frente a quienes son de colegio oficial. 
+
+Como resultado de los valores obtenidos en la tabla anterior se tiene entonces la siguiente ecuación para el modelo estimado.
+
+$$  \pi_{i} =  \frac{1}{1+exp\{-(-0.3331+1.2063x)\}} $$ 
+
+Que reescrito como modelo logit derivará en la siguiente fórmula:
+
+$$  log(\frac{\pi_{x}}{1-\pi_{x}})=-0.3331 +1.2063x$$ 
+
+Con x tomando el valor 0 o el valor 1 dependiendo de si el estudiante es de colegio privado (1) u oficial (0). 
+
+Este primer acercamiento a la explicación del resultado mediante un modelo logístico clásico 2x2 ha derivado en una corroboración de lo que la intuición ya dictaba, y es que el pertenecer a un colegio privado aumenta la probabilidad (asociada casi de forma directa al logit) de obtener un resultado entre 0 y 500, que para este caso de respuesta binomial es el "mejor" resultado. 
+
+# Modelo de respuesta binomial y variable explicativa con multiples niveles
+
+En este caso, siguiendo nuestra exploración de posibles variables categóricas que expliquen el resultado obtenido por los estudiantes en el examen ICFES mediante el modelamiento logístico, se presentará el caso de un modelo con la misma variable de respuesta binomial, con los niveles de resultados agrupados en las categorías de 0 a 500 y de 500 a 1000, es decir, los 500 "mejores" versus los 500 "peores", pero esta vez distinto a la sección anterior, se tratará de explicar mediante una variable con multiples categorías o niveles, como lo es la clasificación económica, que cuenta con 10 niveles en donde el primero de ellos corresponde a los estudiantes más pobres del departamento, y el décimo nivel corresponde a los más ricos.
+
+La justificación para la elección de esta variable es que con el conocimiento a priori se puede pensar que el nivel económico de una persona es influyente en su capacidad de acceder a una mejor educación y con ello, en su probabilidad de obtener un mejor resultado en la prueba. Con lo anterior en mente sería natural pensar que pertenecer a un nivel económico debería ser significativo para tener mayores o menores probabilidades de obtener uno de los dos resultados (0 a 500 o 500 a 1000), siendo los más ricos los más opcionados para ocupar el nivel de los 500 mejores, e inclusive siendo más rigurosos, de los primeros 100. 
+
+Véase primero el conteo de estudiantes por nivel socioeconómico de acuerdo al resultado obtenido en la prueba. 
+
+```{r echo=FALSE}
+datos_antioquia$results2 <- datos_antioquia$resultado
+datos_antioquia$results2 <- as.character(datos_antioquia$results2)
+datos_antioquia$results2[datos_antioquia$resultado== "(0,100]" |
+                          datos_antioquia$resultado== "(100,200]" |
+                          datos_antioquia$resultado== "(200,300]" |
+                          datos_antioquia$resultado== "(300,400]" |
+                          datos_antioquia$resultado== "(400,500]"] <- "(0,500]"
+datos_antioquia$results2[datos_antioquia$resultado== "(500,600]" |
+                          datos_antioquia$resultado== "(600,700]" |
+                          datos_antioquia$resultado== "(700,800]" |
+                          datos_antioquia$resultado== "(800,900]" |
+                          datos_antioquia$resultado== "(900,1e+03]"] <- "(500,1000]"
+tabla3 <- table(datos_antioquia$clasificacion_economica, datos_antioquia$results2)
+rownames(tabla3) <- c("Nivel 1","Nivel 2","Nivel 3","Nivel 4","Nivel 5",
+                      "Nivel 6","Nivel 7","Nivel 8","Nivel 9","Nivel 10")
+kable(tabla3, caption = "Conteo de estudiantes por nivel socioeconómico y resultado binomial")
+```
+
+
+```{r include=FALSE}
+N<-matrix(c(
+  13847, 23218, 
+  7584,7740,
+  6126,4158,
+  3305,1439,
+  2225,612,
+  1711,257,
+  231,21,
+  192,12,
+  40,2,
+  817,42
+),byrow=T,ncol=2)
+temp<-diag(rep(1,10))[,-1]
+X<-cbind(1,temp)
+res2<-LogisticaGSK(N,10,X=X)
+```
+
+La prueba de hipótesis para la significancia general del modelo tiene la siguiente expresión como hipótesis nula.
+
+$$  H_{0} : \beta_{1} =\beta_{2} = \beta_{3} =~...~= \beta_{9}=0$$
+
+Y la conclusión respecto a dicha significancia global se hará con los resultados provenientes de la prueba para el estadístico $\chi^{2}$ que se observa en la siguiente tabla.
+
+```{r echo=FALSE}
+prueba2 <- array(c(5414.6144, 0), c(2,1))
+rownames(prueba2) <- c("Chi-cuadrado calculado", "Valor-p")
+colnames(prueba2) <- c(" ")
+kable(prueba2, caption = "Resultados asociados a la prueba de hipótesis")
+```
+
+El valor-p asociado al estadístico de prueba ha resultado ser tan extremadamente pequeño que es prácticamente 0 (cero), permitiendo rechazar la hipótesis nula con bastante seguridad, y concluir que por lo menos uno de los niveles de clasificació económica del estudiante es significativo en la explicación del resultado obtenido en la prueba. Ahora bien, la pregunta natural es, ¿cuáles de los niveles lo son y en qué medida? Obsérvense entonces las estimaciones que se tienen para todos los niveles socioeconómicos. 
+
+```{r echo=FALSE}
+t3 <- array(c(-0.5168592, 0.01073722, -48.137167, 0.000000e+00,
+              0.4964983, 0.01939957,  25.593263, 1.813141e-144,
+              0.9043671, 0.02278216,  39.696285,  0.000000e+00,
+              1.3483473, 0.03335846,  40.419952,  0.000000e+00,
+              1.8076391, 0.04689044,  38.550274,  0.000000e+00,
+              2.4126164, 0.06775538,  35.607745, 1.063078e-277,
+              2.9147545, 0.22817392,  12.774266,  2.282898e-37,
+              3.2894480, 0.29775318,  11.047566,  2.252383e-28,
+              3.5125915, 0.72464839,   4.847305,  1.251502e-06,
+              3.4848287, 0.15858374,  21.974692, 5.029540e-107), c(4,10))
+t3 <- t(t3)
+colnames(t3) <- c("betas","error","Z-value","p-value")
+kable(t3, caption = "Estimaciones del modelo")
+```
+
+De la anterior tabla el principal resultado que se puede destacar es que la prueba individual para cada uno de los niveles económicos demostró que cada uno de estos es significativo en la explicación de logit. Es decir, cada nivel puede determinar que un estudiante tenga más o menos probabilidades que cierto nivel de referencia (en nuestro caso el nivel socioeconómico 1), de obtener un resultado entre 0 y 500. El modelo en general es difícil de observar a simple  en tanto existe esa comparación interna entre cada nivel con el nivel de referencia, pero se puede entender la interpretación con facilidad si se particiona el modelo de acuerdo a cada nivel. La forma general del modelo será la siguiente:
+
+$$ log(\frac{\pi_{x}}{1-\pi_{x}})=\beta_{0}+\beta x  $$
+Donde x tomará valores entre 0 y 1 en cada comparación directa, y en donde el 0 corresponde al nivel de referencia de la variable explicativa, es decir, el nivel 1 de la clasificación económica, y el 1 será el valor que tome cuando el estudiante pertenezca al otro nivel de comparación.  
+
+* Primer nivel socioeconómico: Si el estudiante pertenece al primer nivel socioeconómico estamos en el caso base en que sólo se considera el intercepto, y la fórmula que sigue el modelo es la siguiente:
+
+
+$$ log(\frac{\pi_{0}}{1-\pi_{0}})=\beta_{0}+\beta (0)=\beta_{0}=-0.5168  $$
+
+Este nivel base en general no suele tener una fácil interpretación, pero para no dejar la idea en el aire una aproximación puede ser que, cuando un estudiante pertenece al primer nivel económico, es decir, vive en pobreza extrema, su contribución al logit es negativa, cosa que puede traducirse como que sus probabilidades de clasificar dentro de los primeros 500 estudiantes es menor que para los demás niveles socioeconómicos.  
+
+* Para el segundo nivel socioeconómico: Desde este nivel comienza la comparación directa contra el nivel de referencia.
+
+$$ log(\frac{\pi_{1}}{1-\pi_{1}})=\alpha+\beta (1)=\beta_{0}+\beta_{1}=-0.5168+0.4965 $$
+Lo anterior se interpreta como que, el logit de sacar un resultado entre 0 y 500 es 0.4965 unidades mayor para personas del segundo nivel socioeconómico que para personas del primer nivel socioeconómico.
+
+* Para el tercer nivel socioeconómico la interpretación y desarrollo será idéntica a la anterior, cambiando en este caso la cantidad que se suma al intercepto, determinada en este caso por $\beta_{2}$
+
+$$ log(\frac{\pi_{1}}{1-\pi_{1}})=\alpha+\beta (1)=\beta_{0}+\beta_{2}=-0.5168+0.9044 $$
+
+En este caso la conclusión, similar a la anterior, es que el logit de obtener un resultado entre 0 y 500 es 0.9044 unidades mayor para personas del tercer nivel socioeconómico que para personas del primer nivel socioeconómico.
+
+Si se continúa el desarrollo y las interpretaciones con la línea argumental expuesta para estos tres primeros niveles, se observa entonces que, a medida que se aumenta el nivel socieconómico, se aumenta el logit de obtener un resultado entre 0 y 500, llegando al punto en el décimo nivel de ser 3.48 unidades mayor para las personas más ricas que para las personas más pobres, siendo esto una clara muestra de que el nivel socioeconómico si es una variable determinante sobre el resultado obtenido en las pruebas al subdividirlo en estas dos categorías. 
+
+# Modelos multinomiales
+
+Por último se implementará el modelo para el caso de regresión logística multinomial. En este caso, como se expresó anteriormene, la variable de respuesta "resultado" ha sido subdividida en 3 niveles principales en aras de mantener la explicación simple y sin precisar la redundancia de conclusiones a lo largo de muchos niveles.  
+
+```{r include=FALSE}
+datos_antioquia$results <- datos_antioquia$resultado
+datos_antioquia$results <- as.character(datos_antioquia$results)
+datos_antioquia$results[datos_antioquia$resultado== "(0,100]" |
+                          datos_antioquia$resultado== "(100,200]" |
+                          datos_antioquia$resultado== "(200,300]"] <- "(0,300]"
+datos_antioquia$results[datos_antioquia$resultado== "(300,400]" |
+                          datos_antioquia$resultado== "(400,500]" |
+                          datos_antioquia$resultado== "(500,600]"] <- "(300,600]"
+datos_antioquia$results[datos_antioquia$resultado== "(600,700]" |
+                          datos_antioquia$resultado== "(700,800]" |
+                          datos_antioquia$resultado== "(800,900]" |
+                          datos_antioquia$resultado== "(900,1e+03]"] <- "(600,1000]"
+```
+
+Primero obsérvense los conteos totales de estudiantes en cada rango de resultados de la variable de respuesta para el departamento de Antioquia. 
+
+```{r echo=FALSE}
+datos_antioquia$results <- as.factor(datos_antioquia$results)
+
+resumen <- array(c(21689,21875,30019), c(1,3))
+colnames(resumen) <- c("(0,300]","(300,600]","(600,1000]")
+kable(resumen, caption = "Cantidades por rango de resultados")
+```
+
+
+```{r include=FALSE}
+tabla2 <- table(datos_antioquia$COLE_NATURALEZA, datos_antioquia$results,datos_antioquia$ESTU_GENERO, datos_antioquia$ECON_SN_INTERNET)
+tabla2
+```
+
+En este caso, la explicación de la variable resultado se hará haciendo uso de algunas variables categóricas binomiales: 
+
+* Naturaleza del colegio (privado u oficial)
+* Género del estudiante (masculino o femenino) 
+* Acceso a internert en el hogar (con acceso o sin acceso)
+
+Los conteos para dicha subdivisión se observan a continuación
+
+```{r echo=FALSE}
+t4 <- matrix(c(
+              "Sin conexión","Femenino","Privado",276, 832, 2314,
+              "Sin conexión","Femenino","Oficial",2022,4404,8090,
+              "Sin conexión","Masculino","Privado",348,617,1457,
+              "Sin conexión","Masculino","Oficial",2305,3304,4760,
+              "Con conexión","Femenino","Privado",3453,1611,1896,
+              "Con conexión","Femenino","Oficial",4820,5667,5993,
+              "Con conexión","Masculino","Privado",3551,1416,1495,
+              "Con conexión","Masculino","Oficial",4914,4024,4014
+              ), ncol = 6, byrow = TRUE)
+colnames(t4) <- c("Internet","Género","Naturaleza","(0,300]","(300,600]","(600,1000]")
+kable(t4, caption = "Conteos por resultado para cada combinación de covariables")
+
+```
+
+
+```{r include=FALSE}
+M1 <- matrix(c(
+              276, 832, 2314,
+              2022,4404,8090,
+              348,617,1457,
+              2305,3304,4760,
+              3453,1611,1896,
+              4820,5667,5993,
+              3551,1416,1495,
+              4914,4024,4014
+              ), ncol = 3, byrow = TRUE)
+M1
+```
+
+
+```{r include=FALSE}
+X <- matrix(c(
+  0,0,0,
+  1,0,0,
+  0,1,0,
+  1,1,0,
+  0,0,1,
+  1,0,1,
+  0,1,1,
+  1,1,1
+), nrow=8, byrow = TRUE)
+
+multinomial.GSK(M1, 8, X, ordenada = F)
+```
+La prueba de hipótesis asociada al modelo multinomial tendrá como hipótesis nula la siguiente:
+
+$$  H_{0} = \beta_{1}=\beta_{2}=~...~=\beta_{k}=0 $$
+
+Los resultados para la prueba de significancia global del modelo se observan a continuación.
+
+```{r echo=FALSE}
+prueba3 <- array(c(3266.136, 0), c(2,1))
+rownames(prueba3) <- c("Chi-cuadrado calculado", "Valor-p")
+colnames(prueba3) <- c(" ")
+kable(prueba3, caption = "Resultados asociados a la prueba de hipótesis")
+```
+
+Dado que el valor-p para el estadístico $\chi^2$ es tan pequeño como para ser considerado prácticamente cero, se procede a rechazar la hipótesis nula y concluir que al ser incluídas simultáneamente en el modelo, por lo menos uno de los niveles de alguna de las tres variables explicativas (género, naturaleza del colegio y conexión a internet en el hogar), es significativo en la explicación del resultado. La pregunta natural, como en los dos casos anteriores es ¿cuál/cuáles son esos niveles significativos de la variable y en qué medida?
+
+Véanse ahora las estimaciones obtenidas para los coeficientes del modelo vía GSK sabiendo que el modelo multinomial cuenta con la siguiente estructura teórica para la explicación de los logits:
+
+$$  f = X\beta $$
+Que para el caso, tras las correspondientes estimaciones de los coeficientes, será el siguiente modelo:
+
+Los resultados de dichas estimaciones son los siguientes:
+
+```{r echo=FALSE}
+tabla4 <- array(c(
+  -1.1591589, 0.014945104, -77.56112, "0.00",
+  -1.1065917, 0.013964003, -79.24602, "0.00",
+  -0.1104561, 0.009832432, -11.23385, "2.780932e-29",
+   0.1465599, 0.008667856,  16.90844, "3.899195e-64",
+   0.5022825, 0.009938510,  50.53901, "0.00"
+), c(4,5))
+tabla4 <- t(tabla4)
+
+colnames(tabla4) <- c("Beta","Error","Z-value","p-value")
+kable(tabla4, caption = "Estimaciones para el modelo")
+```
+
+Los resultados para las pruebas de significancia indivivuales arrojanron entonces que cada una de las estimaciones realizadas para los coeficientes del modelo son significativas en la explicación conjunta del resultado, es decir,  
+
+# Conclusión
+
+Tras realizar el ajuste mediante los tres tipos de modelos logísticos que se exploraron durante el curso, se obtienen resultados similares en la medida en que las variables explicativas elegidas han sido significativas en la explicación del resultado en las pruebas ICFES aún haciendo los agrupamientos que se hicieron dentro de esta. 
+
+Con lo anterior queda en evidencia que el resultado puede ser explicado por distintas variables de tipo categórico al emplear la regresión logística, para el caso particular, la naturaleza del colegio, la clasificación socioeconómica, el género y la conexión a internet en el hogar. 
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
